@@ -1,0 +1,13 @@
+{
+  "result": "Passed",
+  "totalTestCount": 39,
+  "passedTests": 39,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "testFailures": [],
+  "runtimeWarnings": [],
+  "verificationDate": "2026-10-27",
+  "toolchain": "Xcode 27.1 (27A9275)",
+  "platform": "Apple Vision Pro Simulator, visionOS 27.0, arm64",
+  "scope": "Sanitized public-source checkout, full instrument and spatial toolbar regression suite"
+}

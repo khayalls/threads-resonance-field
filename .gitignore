@@ -1,0 +1,36 @@
+# Local build, Xcode user state and test artifacts
+.DS_Store
+__pycache__/
+*.py[cod]
+build/
+builds/
+DerivedData/
+.build/
+.swiftpm/
+work/
+xcuserdata/
+*.xcuserstate
+*.xcresult/
+*.xcarchive/
+*.app/
+*.dSYM/
+*.ipa
+*.log
+*.crash
+*.ips
+*.sqlite*
+*.zip
+# Personal signing and service credentials
+Configuration/LocalSigning.xcconfig
+*.mobileprovision
+*.provisionprofile
+*.p8
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+credentials.json
+*service-account*.json

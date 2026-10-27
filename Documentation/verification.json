@@ -1,0 +1,39 @@
+{
+  "audioFrames" : 1017600,
+  "audioPeak" : 0.049231931567192078,
+  "audioReady" : false,
+  "decorativeStrands" : 520,
+  "environment" : "visionOS Simulator",
+  "frames" : 2503,
+  "interactions" : {
+    "demo" : 10,
+    "loop" : 11,
+    "resonance" : 4,
+    "stretch" : 1,
+    "wave" : 3
+  },
+  "interactiveStrings" : 10,
+  "latticeTriangles" : 76160,
+  "loopEvents" : 0,
+  "loopState" : "empty",
+  "meanFrameIntervalMS" : 8.5053279881688937,
+  "p95FrameIntervalMS" : 11.111125349998474,
+  "physicalHandTrackingVerified" : false,
+  "transitions" : [
+    "entered",
+    "record_started",
+    "stretch_began",
+    "stretch_released",
+    "wave",
+    "resonance",
+    "record_stopped",
+    "loop_playback_observed",
+    "loop_paused",
+    "loop_playing",
+    "loop_cleared",
+    "recentered",
+    "reset",
+    "exit_requested",
+    "exited"
+  ]
+}
