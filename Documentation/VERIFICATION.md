@@ -1,55 +1,37 @@
-# Verification — THREADS
+# Verification — THREADS 1.1
 
-Original instrument verification: 25 October 2026. The sanitized public-source checkout was rebuilt and all 39 tests passed again on 27 October 2026. Publication checks are recorded in SecurityAudit.md.
+Verified 1 November 2026. See [update notes](UPDATE_1_1.md) for the reported issues and resulting changes.
 
-## Build and test results
+## Current results
 
 | Check | Result |
 | --- | --- |
 | Xcode | 27.1, build 27A9275 |
-| SDK | visionOS / visionOS Simulator 27.0 |
-| Simulator target | Apple Vision Pro, visionOS 27.0 (24M362), arm64 |
+| SDK / simulator | visionOS 27.0 / Apple Vision Pro Simulator, arm64 |
 | Simulator Debug build | Passed |
-| Physical-target optimized Release build | Passed, unsigned; compilation only |
-| Automated behavior / integration tests | 38 passed, 0 failures |
-| Native simulator UI test | 1 passed, 0 failures |
-| Total | **39 passed, 0 failed, 0 skipped** |
-| Physical deployment | Not performed |
+| Behavior and integration tests | 52 passed, 0 failed |
+| Complete native UI test | 1 passed, 0 failed |
+| Total | **53 passed, 0 failed, 0 skipped** |
+| Physical-target optimized Release build | Passed with signing disabled; ARKit code compiled |
+| Updated signed device build | Compilation completed; macOS signing authorization pending |
+| Updated headset installation / wearer validation | Pending |
 
-The native UI test exercises entry, Sound and precise volume changes, Ambient, Play controls, Wave / Resonate / Stretch, recording, cancellation of replacement, pause, Clear / Undo, Recenter with a preserved loop, cancellation of Exit, compact / expanded controls, Help, Reset and return to the welcome window. See TOOLBAR_UX.md for the redesign decisions and remaining device checks. See `test-summary.json` for the sanitized machine-readable summary. Raw Xcode result bundles remain local and are intentionally excluded from the public source.
+The complete suite passed before a final Tools layout adjustment. The native UI test was then rerun after moving Recenter and Play controls above the new settings; behavior code was unchanged by that adjustment. The UI flow verifies Sound moods, Echo trails, volume and Ambient, note and gesture controls, loop protections, Clear/Undo, Recenter, compact controls, Help, Reset, playing distance, tracking restart, guided-play entry, and three repeated exit/reentry cycles with exactly one control window. The sanitized machine-readable result is in `test-summary.json`; raw Xcode results remain local.
 
-Behavior tests cover finite segment intersections and degeneracy, physical reach, valid mesh indices, actual fingertip crossings, movement rejection, contact rearming, cooldown behavior, loss-of-tracking reset, damped motion, fixed endpoints, reduced motion, bounded stretching, clearing state, loop timing and boundaries, pauses, stalls, automatic recording stop, storage bounds, waveform headroom / attack / decay / repeatability, measured tuning of all ten rendered acoustic notes within ten cents, and construction of the actual RealityKit scene.
-
-## Timed simulator performance
-
-A separate `--verify` run exercised a performance, stretching, wave, resonance, record / playback / pause / resume, reset and exit. Its local report is `verification.json`.
-
-- 520 decorative filaments; 10 interactive strings; 76,160 triangles in batched decorative lattices and ribbons. Architecture, rings and interactive geometry are additional.
-- 2,503 RealityKit scene-update callbacks over the run. Mean callback interval: **8.51 ms**; 95th percentile: **11.11 ms**. These measure simulator scene-update cadence, not compositor frame rate or physical-device GPU performance.
-- Audio mixer tap observed **1,017,600 frames** with nonzero peak **0.0492**. This establishes signal through the running mixer, not perceived sound quality or end-to-end gesture latency.
-- Ten demo notes, one stretch release, three wave notes, four resonance notes, and **11 loop playback events** were observed.
-- The report records `entered` through `exited`. At the end, recording is cleared, loop state is empty, and `audioReady` is false because Exit has paused the engine as intended.
+New behavior coverage includes partly occluded fingers, open-palm classification, relaxed waves outside the old narrow target box, closed/far/stationary/reacquired-hand rejection, jitter rejection, gentle fingertip strokes, single pending control-window requests, synthetic hand-to-wave integration, reach changes preserving a loop, head-space transform round trips, guided-note progression, retuning all three scales, finite echoes, and live contact not being swallowed or recursively recorded by echo tails. Existing geometry, synthesis/tuning, loop timing, gesture and scene-construction tests continue to pass.
 
 ## Visual inspection
 
-`Media/THREADS-field.png`, `Media/THREADS-toolbar-sound.png`, `Media/THREADS-toolbar-loop.png` and `Media/THREADS-welcome.png` are actual simulator captures of the final build. The field image visibly confirms the architectural lattices, ceiling ribbons, circular platforms, foreground instrument, contact beads, light pulse and secondary controls. They are not generated concept images.
+The updated Sound and Tools panels were captured from the running simulator and checked for readable labels, native control layout, scrolling, one foreground dock, and available Close/Exit actions. These captures are in `Media/THREADS-update-sound.png` and `Media/THREADS-update-tools.png`. The older field/welcome/toolbar images remain historical captures from the original October build.
 
-The final 39-test run, refreshed runtime measurements and current captures were collected on an Apple Vision Pro simulator. Earlier shared-simulator capture attempts could be black after repeated test sessions. Screenshot attachments inside the XCTest bundle can be blank on this platform; the separate simulator captures are the visual evidence.
+## Headset evidence
 
-## Audio study
+Version 1.0 was signed, installed and launched on a physical Vision Pro on 31 October; a running process was verified. The wearer subsequently reported unreliable waves and overlapping controls. Version 1.1 addresses these paths in code and regression tests. Its real hand tracking, wave reliability, comfortable reach, spatial localization, latency and sustained performance remain pending wearer confirmation. A simulator gesture button or a synthetic hand trajectory does not establish physical tracking success.
 
-`Media/THREADS-audio-study.wav` is a 12-second, 48 kHz stereo study rendered offline with the same acoustic synthesis, positional Apple audio environment, and warm hall reverb. It is an illustrative native audio render, not a headset recording or microphone capture. Its peak is 0.2429, RMS 0.0267, and it contains zero clipped samples.
+Use [the physical-device checklist](DEVICE_TEST_CHECKLIST.md) on the updated build. Signed output, provisioning profiles, device identifiers, signing settings and raw diagnostics are excluded from the repository.
 
-## Remaining physical verification
+## Earlier baseline
 
-Real ARKit fingertip and pinch reliability, comfortable reach, raw-hand gesture recognition, tracking loss / reacquisition, real audio localization, headset speaker balance, motion-to-sound latency, sustained frame performance / thermals and user comfort remain unverified. The physical Release build verifies API compatibility and compilation only. Use `DEVICE_TEST_CHECKLIST.md` while wearing the headset.
+The original public-source suite passed 39 tests on 27 October 2026. The previous `--verify` run in `verification.json` measured simulator scene-update callbacks and audio mixer output for that earlier build. Those values are not new 1.1 performance measurements, compositor FPS or physical-device latency results. The offline 12-second `Media/THREADS-audio-study.wav` remains an illustration of the original synthesis and spatial audio graph, not a microphone or headset recording.
 
-The simulator uses explicit note / gesture controls and a fixed seated instrument/listener position; it cannot validate real hand tracking or head-relative ARKit calibration. The physical build uses tracked head position and orientation and HRTF spatialization; the simulator uses spherical-head spatialization as a reliable fallback. The redesigned native controls require visionOS 26.0 or later. Only visionOS 27.0 was run-tested in the simulator; physical-device and older supported OS compatibility still need device verification.
-
-Loops are in memory and clear on exit; there is no persistence, microphone capture, continuous granular stretch synthesis, advanced shader, or true volumetric scattering. Stretch tension is heard as rate-shifted acoustic excitations and a release note. Reflections use restrained material lighting and stylized floor light pools. Physical hardware tuning may change thresholds, brightness, mix, or strand density after user testing.
-
-## Apple references used
-
-- [Tracking and visualizing hand movement](https://developer.apple.com/documentation/visionos/tracking-and-visualizing-hand-movement) informed joint-transform handling; the installed ARKit SDK was also inspected.
-- [AVAudioEnvironmentNode](https://developer.apple.com/documentation/avfaudio/avaudioenvironmentnode) provides world-positioned mono sources and listener orientation.
-- [Configuring your app icon](https://developer.apple.com/documentation/xcode/configuring-your-app-icon) describes visionOS layered icons; the project includes an original three-layer procedural icon based on Xcode's installed asset template.
+The app targets visionOS 26.0. The simulator cannot execute real ARKit hand/head tracking; the physical-target build compiles that path. Hand data and loops remain in memory, with no microphone capture, network service or analytics.

@@ -16,6 +16,11 @@ final class ResonanceChamber {
     private var lineMaterial = UnlitMaterial(color: UIColor(red: 0.47, green: 0.78, blue: 1, alpha: 1))
     private var iceMaterial = UnlitMaterial(color: UIColor(red: 0.74, green: 0.96, blue: 1, alpha: 1))
     private var calibrated = false
+    var isCalibrated: Bool { calibrated }
+    private var headTransform: simd_float4x4?
+    var reach = PlayingReach.relaxed {
+        didSet { if let headTransform { calibrate(to: headTransform, force: true) } }
+    }
     private(set) var decorativeCount = 0
     private(set) var triangleCount = 0
     var reducedMotion = false
@@ -163,15 +168,17 @@ final class ResonanceChamber {
     }
     func calibrate(to head: simd_float4x4, force: Bool = false) {
         guard !calibrated || force else { return }
+        headTransform = head
         let p = head.columns.3, forward = -head.columns.2
-        instrument.position = [p.x, p.y, p.z]
         let yaw = atan2(-forward.x, -forward.z)
-        instrument.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0]); calibrated = true
+        let rotation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+        instrument.position = V3(p.x, p.y, p.z) + rotation.act(reach.offset)
+        instrument.orientation = rotation; calibrated = true
     }
     func prepareEntry() { calibrated = false }
     func localPoint(_ world: V3) -> V3 { instrument.convert(position: world, from: nil) }
     func worldPoint(_ local: V3) -> V3 { instrument.convert(position: local, to: nil) }
-    func animate(motions: [StringMotion], time: Float, fade: Float, resonance: Float) {
+    func animate(motions: [StringMotion], time: Float, fade: Float, resonance: Float, guidedTarget: Int? = nil) {
         root.components.set(OpacityComponent(opacity: fade))
         for i in 0..<strings.count {
             let motion = motions[i], (a, b) = Instrument.endpoints(i)
@@ -180,13 +187,13 @@ final class ResonanceChamber {
                 let delta = end - start
                 let entity = strings[i][j]
                 entity.position = (start + end) * 0.5
-                let radius: Float = 0.0016 + motion.energy * 0.0011 + motion.proximity * 0.0006
+                let radius: Float = 0.0016 + motion.energy * 0.0011 + motion.proximity * 0.0006 + (guidedTarget == i ? 0.001 : 0)
                 entity.scale = [radius, simd_length(delta), radius]
                 entity.orientation = simd_quatf(from: [0, 1, 0], to: simd_normalize(delta))
             }
             let center = motion.point(a, b, t: 0.47)
             contacts[i].position = center
-            let size: Float = 0.007 + motion.proximity * 0.004 + motion.energy * 0.003
+            let size: Float = (guidedTarget == i ? 0.014 : 0.009) + motion.proximity * 0.004 + motion.energy * 0.003
             contacts[i].scale = V3(repeating: size)
             pulses[i].isEnabled = motion.pulse < 1
             if motion.pulse < 1 { pulses[i].position = motion.point(a, b, t: motion.pulse) }

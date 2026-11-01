@@ -30,6 +30,7 @@ struct FieldView: View {
                 }
                 model.onVerificationExit = { await leave() }
                 model.start()
+                model.requestControls { openWindow(id: "field-dock") }
             } catch { model.error = "The chamber could not be created: \(error.localizedDescription)" }
         } attachments: {
             Attachment(id: "controls") { FieldControlRecovery().environment(model) }
@@ -37,6 +38,11 @@ struct FieldView: View {
                 VStack(spacing: 9) {
                     Text("T H R E A D S").font(.system(size: 15, weight: .light)).foregroundStyle(.white.opacity(0.85))
                     Text(model.hint).font(.system(size: 12, weight: .light)).foregroundStyle(.white.opacity(0.65))
+                    Text(model.handsStatus).font(.caption).foregroundStyle(.secondary)
+                    if let phrase = model.guidedPhrase {
+                        Text(phrase.complete ? "Phrase complete" : "Guided play · \(phrase.progress + 1) of \(GuidedPhrase.notes.count) · \(model.soundscape.name(phrase.target ?? 0))")
+                            .font(.body.weight(.medium)).foregroundStyle(.cyan)
+                    }
                 }.padding(18).allowsHitTesting(false)
             }
         }
@@ -51,7 +57,6 @@ struct FieldView: View {
             if let i = index(value.entity) { model.pluck(i) }
         })
         .upperLimbVisibility(.visible)
-        .onAppear { openWindow(id: "field-dock") }
         .onChange(of: reduceMotion) { _, value in model.chamber.reducedMotion = value }
         .onChange(of: scenePhase) { _, value in
             if value == .active { model.resume() }

@@ -1,6 +1,8 @@
 # Spatial controls — toolbar redesign
 
-The toolbar is now a movable native visionOS window. Its initial placement uses the welcome window's location, with the system's regular front placement as a fallback. The wearer can move it using standard window controls. It stays where it is placed instead of following head movements.
+The toolbar is a single-instance movable native visionOS `Window` (visionOS 26+). Repeated open requests reuse this scene; a pending-open guard also protects the recovery action. Its initial placement uses the welcome window's location, with the system's regular front placement as a fallback. The wearer can move it using standard window controls. It stays where it is placed instead of following head movements.
+
+The 1.1 Sound panel adds musical moods and optional Echo trails. Tools keeps Recenter and Play controls first, followed by reach, guided play and hand-tracking recovery. Content scrolls while Close and the main Exit action remain available.
 
 ## Interaction decisions
 
@@ -22,7 +24,7 @@ The system's utility-panel placement was also visually inspected: it put this do
 
 ## Verification scope
 
-The updated suite contains 38 behavior/integration tests and one complete native UI test. The UI test exercises Sound, precise level adjustment, Ambient, Play controls, all three simulated gesture effects, recording, cancellation of replacement, pause, Clear/Undo, Recenter without losing a loop, cancellation of Exit, compact/expanded controls, Help, Reset, and return to the welcome window.
+The original October suite contained 38 behavior/integration tests and one complete native UI test. Current coverage and the 1.1 additions are recorded in UPDATE_1_1.md and VERIFICATION.md. The UI test exercises Sound, precise level adjustment, Ambient, Play controls, all three simulated gesture effects, recording, cancellation of replacement, pause, Clear/Undo, Recenter without losing a loop, cancellation of Exit, compact/expanded controls, Help, Reset, and return to the welcome window.
 
 XCTest's slider-drag method could not obtain scrubber coordinates on this simulator, so the test verifies the slider is present and exercises the equivalent precise level buttons. Native slider dragging, headset gaze-hover quality, VoiceOver/Switch Control, large accessibility text sizes, and physical viewing comfort still need device checks. Source-level semantic type and scrolling support are present; they are not a substitute for those tests.
 

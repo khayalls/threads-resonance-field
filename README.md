@@ -8,9 +8,10 @@ Open `THREADS.xcodeproj`, choose the shared **THREADS** scheme, select an Apple 
 
 ## The instrument
 
-- Ten playable strings tuned to D minor pentatonic, D3–C5. Fingertip crossings create notes; speed controls excitation. A light pulse and a damped standing wave respond to the same event.
+- Ten playable foreground strings, with **Nocturne** (D minor), **Dawn** (D major) and **Drift** (A minor) pentatonic moods in Sound. Fingertip crossings create notes; speed controls excitation. A light pulse and a damped standing wave respond to the same event.
 - Pinch a small light bead and pull up to 18 cm to stretch. Tension raises pitch by up to roughly 7.6 semitones. Release returns the string to rest and produces an acoustic response. Native gaze-and-pinch tap and drag offer a fallback.
-- Sweep an open hand through the playing region for a quiet harmonic wave. Hold both open hands near its center, 16–42 cm apart, for 0.85 seconds to invite a chord. A four-second cooldown prevents repeated chords.
+- Sweep an open palm near the foreground strings for a quiet harmonic wave. A short relaxed sweep is enough; there is no exact target point. Hold both open hands near its center, 16–42 cm apart, for 0.85 seconds to invite a chord. A four-second cooldown prevents repeated chords. The distant architectural filaments are decorative.
+- **Echo trails** adds two fading replies to each note, without recursively recording them. **Tools → Start guided play** highlights an eight-note phrase one bead at a time. **Playing distance → Closer / Original** adjusts reach while preserving the loop. Live hand status and **Restart hand tracking** help recover a lost session.
 - Record up to twelve seconds of musical events, then overdub by playing live. Stop early, pause/resume, or clear. No microphone recording. Loops live for the current visit to the field.
 - Quiet spatial notes and slow architectural breathing continue when idle. Sound contains volume and Ambient; Tools contains Recenter, Play controls, Help, Minimize and Reset. Recenter preserves the loop. Clear has a ten-second Undo; replacing, resetting or exiting with a loop has an explicit cancel choice.
 
@@ -44,6 +45,8 @@ Audio and tracking are separate services. Only ten strings participate in contac
 ## Verification and headset use
 
 See [verification results](Documentation/VERIFICATION.md), [Vision Pro setup](Documentation/RUN_ON_VISION_PRO.md), [physical-device checklist](Documentation/DEVICE_TEST_CHECKLIST.md), [toolbar UX decisions](Documentation/TOOLBAR_UX.md), and [portfolio overview](Documentation/PORTFOLIO.md).
+
+The [1.1 update notes](Documentation/UPDATE_1_1.md) describe the open-palm wave correction, single-instance control window and four new features. The window uses visionOS 26's `Window` scene so repeated open requests reuse one instance.
 
 The physical-device build compiles ARKit code that the simulator cannot execute. Successful compilation does **not** establish headset hand-tracking accuracy, comfort, acoustic localization, motion-to-sound latency, or sustained device performance. These require testing while wearing Apple Vision Pro.
 

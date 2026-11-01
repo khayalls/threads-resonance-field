@@ -1,6 +1,10 @@
 # Public-source audit
 
-Audit date: 27 October 2026.
+Initial publication audit: 27 October 2026.
+
+Update audit: 1 November 2026. THREADS 1.1 adds the wave/window corrections and four musical/comfort features described in UPDATE_1_1.md. The updated suite passed 53 tests and the physical-target optimized build passed with signing disabled. Updated simulator captures contain only the app and have ancillary text/EXIF metadata removed. Local signing, raw results and device diagnostics remain excluded. Exact staged files, exported source and reachable history are rechecked before publication; source checksums are regenerated for this update.
+
+The original publication procedure below is retained as a historical record.
 
 The public source was prepared in a separate clean checkout of the supplied empty repository. No earlier local project history was copied. Application Swift sources and project settings are unchanged; documentation and generated media were sanitized for publication.
 

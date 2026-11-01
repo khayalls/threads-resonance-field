@@ -20,6 +20,61 @@ enum Instrument {
     }
 }
 
+enum Soundscape: String, CaseIterable, Identifiable {
+    case nocturne = "Nocturne", dawn = "Dawn", drift = "Drift"
+    var id: String { rawValue }
+    var midi: [Int] {
+        switch self {
+        case .nocturne: return Instrument.midi
+        case .dawn: return [50, 52, 54, 57, 59, 62, 64, 66, 69, 71]
+        case .drift: return Instrument.midi.map { $0 - 5 }
+        }
+    }
+    var detail: String {
+        switch self {
+        case .nocturne: return "D minor · quiet and reflective"
+        case .dawn: return "D major · open and luminous"
+        case .drift: return "A minor · deeper and unhurried"
+        }
+    }
+    func name(_ index: Int) -> String {
+        let note = midi[index]
+        return ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"][note % 12] + String(note / 12 - 1)
+    }
+    func rate(_ index: Int) -> Float { pow(2, Float(midi[index] - Instrument.midi[index]) / 12) }
+}
+
+enum PlayingReach: String, CaseIterable, Identifiable {
+    case relaxed = "Closer", original = "Original"
+    var id: String { rawValue }
+    var offset: V3 { self == .relaxed ? [0, -0.10, 0.14] : .zero }
+}
+
+struct GuidedPhrase {
+    static let notes = [0, 3, 4, 7, 5, 4, 3, 0]
+    private(set) var progress = 0
+    var target: Int? { progress < Self.notes.count ? Self.notes[progress] : nil }
+    var complete: Bool { target == nil }
+    mutating func play(_ string: Int) { if string == target { progress += 1 } }
+}
+
+struct EchoTrail {
+    private var pending: [NoteEvent] = []
+    mutating func append(string: Int, strength: Float, tension: Float, at time: Double) {
+        // Bounded voices, a finite two-note tail, and no feedback into the recorder.
+        guard pending.count <= 44 else { return }
+        for (delay, gain) in [(0.32, Float(0.38)), (0.64, Float(0.16))] {
+            pending.append(NoteEvent(time: time + delay, string: string, strength: strength * gain, tension: tension))
+        }
+    }
+    mutating func tick(at time: Double) -> [NoteEvent] {
+        let due = pending.filter { $0.time <= time && time - $0.time < 0.15 }
+        pending.removeAll { $0.time <= time }
+        return due
+    }
+    mutating func clear() { pending.removeAll() }
+}
+
 enum Geometry {
     static func closestPoint(_ p: V3, _ a: V3, _ b: V3) -> V3 {
         let d = b - a
@@ -98,19 +153,45 @@ struct CrossingGate {
         for i in 0..<Instrument.count {
             let (a, b) = Instrument.endpoints(i)
             let distance = simd_distance(point, Geometry.closestPoint(point, a, b))
-            if distance > 0.045 { armed[i] = true }
+            if distance > 0.048 { armed[i] = true }
             guard i != excluded, armed[i], time - cooldown[i] > 0.18,
-                  velocity > 0.075, velocity < 4,
-                  Geometry.segmentDistance(old, point, a, b) < 0.018 else { continue }
+                  velocity > 0.035, velocity < 4,
+                  Geometry.segmentDistance(old, point, a, b) < 0.028 else { continue }
             // Reject motion along the strand and tracking jitter at a stationary contact.
             let direction = simd_normalize(b - a)
             let perpendicular = point - old - direction * simd_dot(point - old, direction)
-            guard simd_length(perpendicular) > 0.0012 else { continue }
+            guard simd_length(perpendicular) > 0.0003 else { continue }
             hits.append((i, min(1, max(0.18, velocity * 0.65))))
             cooldown[i] = time
             armed[i] = false
         }
         return hits
+    }
+}
+
+struct WaveGate {
+    private var previous: V3?
+    private var previousTime: Double = 0
+    private var sweepOrigin: V3?
+    private var lastTrigger: Double = -100
+
+    mutating func reset() { self = WaveGate() }
+    mutating func sample(palm: V3, open: Bool, at time: Double) -> Float? {
+        defer { previous = open ? palm : nil; previousTime = time }
+        guard open, let old = previous else { sweepOrigin = nil; return nil }
+        let dt = time - previousTime, distance = simd_distance(old, palm)
+        guard dt > 0.001, dt < 0.20, distance < 0.20 else { sweepOrigin = nil; return nil }
+        let speed = distance / Float(dt)
+        let near = (0..<Instrument.count).contains { i in
+            let (a, b) = Instrument.endpoints(i)
+            return Geometry.segmentDistance(old, palm, a, b) < 0.18
+        }
+        guard near, speed > 0.035, speed < 2.5 else { sweepOrigin = nil; return nil }
+        if sweepOrigin == nil { sweepOrigin = old }
+        // Net displacement prevents tiny back-and-forth tracking jitter from accumulating a wave.
+        guard simd_distance(sweepOrigin!, palm) >= 0.035, time - lastTrigger >= 0.8 else { return nil }
+        sweepOrigin = palm; lastTrigger = time
+        return min(0.75, 0.3 + speed * 0.45)
     }
 }
 

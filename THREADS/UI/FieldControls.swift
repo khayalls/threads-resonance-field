@@ -8,8 +8,8 @@ struct FieldControlWindow: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         FieldControls(exit: { Task { await leave() } })
-            .onAppear { model.controlsWindowOpen = true }
-            .onDisappear { model.controlsWindowOpen = false }
+            .onAppear { model.controlsAppeared() }
+            .onDisappear { model.controlsDisappeared() }
     }
     private func leave() async {
         if !model.welcomeIsOpen { model.welcomeIsOpen = true; openWindow(id: "welcome") }
@@ -23,11 +23,16 @@ struct FieldControlRecovery: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         if !model.controlsWindowOpen {
-            Button { openWindow(id: "field-dock") } label: {
-                Label("Show controls", systemImage: "slider.horizontal.3")
+            Button { model.requestControls { openWindow(id: "field-dock") } } label: {
+                Label(model.controlsWindowRequested ? "Opening controls…" : "Show controls", systemImage: "slider.horizontal.3")
                     .font(.body).frame(minWidth: 180, minHeight: 60)
-            }.buttonStyle(.borderless).padding(16).glassBackgroundEffect(in: Capsule())
+            }.disabled(model.controlsWindowRequested).buttonStyle(.borderless).padding(16).glassBackgroundEffect(in: Capsule())
                 .accessibilityIdentifier("restore-controls-window")
+                .task(id: model.controlsWindowRequested) {
+                    guard model.controlsWindowRequested else { return }
+                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                    if !model.controlsWindowOpen { model.controlsWindowRequested = false }
+                }
         }
     }
 }
@@ -235,12 +240,20 @@ struct FieldControls: View {
         }
     }
     private func panelHeight(_ selected: Panel) -> CGFloat {
-        switch selected { case .sound: return 430; case .play: return 560; case .tools, .guide: return 650 }
+        switch selected { case .sound: return 650; case .play: return 560; case .tools, .guide: return 650 }
     }
 
     private var soundPanel: some View {
         @Bindable var model = model
         return Group {
+            Text("Musical mood").font(.headline)
+            Picker("Musical mood", selection: $model.soundscape) {
+                ForEach(Soundscape.allCases) { mood in Text(mood.rawValue).tag(mood) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("musical-mood")
+            Text(model.soundscape.detail).font(.subheadline).foregroundStyle(.secondary)
+            Toggle("Echo trails", isOn: $model.echoEnabled).frame(minHeight: 60).accessibilityIdentifier("echo-trails")
+            Text("Two soft echoes follow each note. Your recorded loop keeps its original gestures.").font(.subheadline).foregroundStyle(.secondary)
+            Divider()
             HStack {
                 Label("Sound level", systemImage: "speaker.wave.2")
                 Spacer()
@@ -275,8 +288,25 @@ struct FieldControls: View {
             panelAction("Recenter", detail: "Bring the instrument here. Keep your loop.", symbol: "viewfinder", id: "recenter-field") {
                 panel = nil; model.recenter()
             }
-            Divider()
             panelAction("Play controls", detail: "Play notes and gestures with gaze and pinch.", symbol: "pianokeys", id: "play-controls") { panel = .play }
+            Divider()
+            Text("Playing distance").font(.headline)
+            Picker("Playing distance", selection: Binding(get: { model.reach }, set: { model.setReach($0) })) {
+                ForEach(PlayingReach.allCases) { reach in Text(reach.rawValue).tag(reach) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("playing-distance")
+            Text("Closer brings the strings toward relaxed hands without moving your loop.").font(.subheadline).foregroundStyle(.secondary)
+            panelAction(model.guidedPhrase == nil ? "Start guided play" : "Restart guided play", detail: "Follow eight notes on the brighter beads.", symbol: "sparkles", id: "guided-play") {
+                model.startGuidedPlay(); panel = nil
+            }
+            if model.guidedPhrase != nil {
+                panelAction("Free play", detail: "Leave the phrase and explore freely.", symbol: "waveform", id: "free-play") { model.stopGuidedPlay(); panel = nil }
+            }
+            Divider()
+            Text(model.handsStatus).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("hands-status")
+            Text(model.trackingStatus).font(.caption).foregroundStyle(.secondary)
+            panelAction("Restart hand tracking", detail: "Use if open-palm waves stop responding.", symbol: "hand.wave", id: "restart-hands") {
+                model.restartTracking()
+            }
             panelAction("How to play", detail: "Discover pluck, stretch, wave and resonance.", symbol: "hand.draw", id: "help-field") { panel = .guide }
             Divider()
             panelAction("Minimize controls", detail: "Hide the main controls. Keep Exit available.", symbol: "arrow.down.right.and.arrow.up.left", id: "minimize-controls") {
@@ -312,9 +342,9 @@ struct FieldControls: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 5), spacing: 16) {
                 ForEach(0..<Instrument.count, id: \.self) { i in
                     Button { model.pluck(i, source: "demo") } label: {
-                        Text(Instrument.names[i]).font(.body.monospaced().weight(.medium))
+                        Text(model.soundscape.name(i)).font(.body.monospaced().weight(.medium))
                             .frame(maxWidth: .infinity, minHeight: 60)
-                    }.buttonStyle(.bordered).accessibilityLabel("Play \(Instrument.names[i])")
+                    }.buttonStyle(.bordered).accessibilityLabel("Play \(model.soundscape.name(i))")
                 }
             }
             Divider()
@@ -340,7 +370,7 @@ struct FieldControls: View {
         Group {
             guideRow("Pluck", symbol: "hand.point.up.left", text: "Brush a fingertip sideways across a nearby thread. A stronger brush creates a stronger note.")
             guideRow("Stretch", symbol: "arrow.left.and.right", text: "Pinch a small light bead and pull gently. Release to let the string return. You can also gaze at a bead and pinch-drag.")
-            guideRow("Wave", symbol: "hand.wave", text: "Move an open palm slowly through the nearby threads.")
+            guideRow("Wave", symbol: "hand.wave", text: "Open your fingers and sweep a palm sideways near the ten foreground strings. A small relaxed sweep is enough; you do not need to hit an exact point.")
             guideRow("Resonance", symbol: "hands.sparkles", text: "Rest both open hands near the center, a comfortable handspan apart, for about a second.")
             Divider()
             Text("Keep your shoulders relaxed. You can use all controls with your hands resting in your lap.")

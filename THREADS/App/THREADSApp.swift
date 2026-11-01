@@ -4,11 +4,12 @@ import SwiftUI
 struct THREADSApp: App {
     @State private var model = FieldModel()
     var body: some Scene {
-        WindowGroup(id: "welcome") { WelcomeView().environment(model) }
+        Window("THREADS", id: "welcome") { WelcomeView().environment(model) }
             .defaultSize(width: 600, height: 620)
             .windowResizability(.contentSize)
-        WindowGroup(id: "field-dock") { FieldControlWindow().environment(model) }
+        Window("Field controls", id: "field-dock") { FieldControlWindow().environment(model) }
             .windowStyle(.plain)
+            .restorationBehavior(.disabled)
             .windowResizability(.contentSize)
             .defaultWindowPlacement { content, context in
                 let size = content.sizeThatFits(.unspecified)

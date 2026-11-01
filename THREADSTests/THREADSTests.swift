@@ -24,6 +24,47 @@ final class GeometryTests: XCTestCase {
 }
 
 final class GestureTests: XCTestCase {
+    func testPartlyOccludedHandStillProvidesPluckingAndOpenPalm() {
+        let sample = HandSample.make(side: 0, tip: [0, 0.19, 0], thumb: nil, palm: [0, 0.09, 0],
+            wrist: .zero, middle: [0.02, 0.20, 0], ring: nil, timestamp: 1)
+        XCTAssertNotNil(sample); XCTAssertTrue(sample!.open); XCTAssertFalse(sample!.pinchAvailable)
+        XCTAssertNil(HandSample.make(side: 0, tip: nil, thumb: .zero, palm: .zero, wrist: .zero, middle: nil, ring: nil, timestamp: 1))
+    }
+    func testClosedOrPointingHandDoesNotBecomeAnOpenPalm() {
+        let sample = HandSample.make(side: 0, tip: [0, 0.19, 0], thumb: [0.1, 0, 0], palm: [0, 0.09, 0],
+            wrist: .zero, middle: [0, 0.08, 0], ring: [0, 0.07, 0], timestamp: 1)
+        XCTAssertFalse(sample!.open)
+    }
+    func testWaveAcceptsRelaxedSweepOutsideTheOldNarrowBox() {
+        var gate = WaveGate(); let p = Instrument.endpoints(4).1 + [0, -0.04, 0.10]
+        _ = gate.sample(palm: p + [-0.06, 0, 0], open: true, at: 1)
+        XCTAssertNotNil(gate.sample(palm: p, open: true, at: 1.08))
+        XCTAssertNil(gate.sample(palm: p + [0.06, 0, 0], open: true, at: 1.16))
+    }
+    func testWaveRejectsClosedFarStationaryAndReacquiredHands() {
+        var gate = WaveGate(); let p = Instrument.center(4)
+        _ = gate.sample(palm: p, open: true, at: 1)
+        XCTAssertNil(gate.sample(palm: p, open: true, at: 1.05))
+        XCTAssertNil(gate.sample(palm: p + [0.1, 0, 0], open: false, at: 1.10))
+        XCTAssertNil(gate.sample(palm: p, open: true, at: 1.15))
+        gate.reset()
+        _ = gate.sample(palm: [3, 3, 3], open: true, at: 2)
+        XCTAssertNil(gate.sample(palm: [3.1, 3, 3], open: true, at: 2.08))
+        gate.reset()
+        _ = gate.sample(palm: p + [-0.06, 0, 0], open: true, at: 3)
+        XCTAssertNil(gate.sample(palm: p + [0.06, 0, 0], open: true, at: 4))
+    }
+    func testSmallTrackingJitterCannotAccumulateAWave() {
+        var gate = WaveGate(); let p = Instrument.center(4)
+        for i in 0..<200 {
+            XCTAssertNil(gate.sample(palm: p + [i % 2 == 0 ? 0.001 : -0.001, 0, 0], open: true, at: 1 + Double(i) * 0.02))
+        }
+    }
+    func testGentleHighRateBrushCanPluckWithoutAFullCentimeterStep() {
+        var gate = CrossingGate(); let p = Instrument.center(4)
+        _ = gate.sample(point: p + [-0.01, 0, 0.02], at: 1)
+        XCTAssertEqual(gate.sample(point: p + [-0.009, 0, 0.02], at: 1.012).map(\.0), [4])
+    }
     func testRealCrossingPlucksOneString() {
         var gate = CrossingGate(); let c = Instrument.center(4)
         _ = gate.sample(point: c + [-0.025, 0, 0], at: 1)
@@ -145,6 +186,60 @@ final class AcousticTests: XCTestCase {
 }
 
 @MainActor final class IntegrationTests: XCTestCase {
+    func testRapidRecoveryRequestsOpenOnlyOneControlWindow() {
+        let m = FieldModel(); m.immersive = true; var opened = 0
+        for _ in 0..<10 { m.requestControls { opened += 1 } }
+        XCTAssertEqual(opened, 1)
+        m.controlsAppeared()
+        m.requestControls { opened += 1 }; XCTAssertEqual(opened, 1)
+        m.controlsDisappeared()
+        m.requestControls { opened += 1 }; XCTAssertEqual(opened, 2)
+        m.immersive = false; m.controlsDisappeared()
+        m.requestControls { opened += 1 }; XCTAssertEqual(opened, 2)
+    }
+    func testWaveFromPartlyOccludedHandReachesTheInstrument() {
+        let m = FieldModel(); m.immersive = true
+        let p = Instrument.center(4)
+        func feed(_ x: Float, _ time: Double) {
+            let palm = m.chamber.worldPoint(p + [x, 0, 0.08])
+            m.receive(side: 0, sample: HandSample(side: 0, tip: palm + [0, 0.13, 0], thumb: palm,
+                palm: palm, open: true, timestamp: time, pinchAvailable: false))
+        }
+        feed(-0.06, 1); feed(0, 1.08)
+        XCTAssertTrue(m.motions[0].energy > 0)
+        XCTAssertTrue(m.motions[7].energy > 0)
+    }
+    func testChangingReachPreservesLoopAndClearsHeldStrings() {
+        let m = FieldModel(); m.immersive = true
+        m.record(); m.pluck(3); m.record(); m.drag(3, displacement: [0.1, 0, 0])
+        m.setReach(.original)
+        XCTAssertEqual(m.loopCount, 1); XCTAssertEqual(m.loopState, .playing)
+        XCTAssertFalse(m.motions[3].grabbed)
+    }
+    func testGuidedPlayAdvancesOnlyForIntendedLiveNotes() {
+        let m = FieldModel(); m.immersive = true; m.startGuidedPlay()
+        m.pluck(3, source: "demo"); XCTAssertEqual(m.guidedTarget, 0)
+        m.pluck(0, source: "loop"); XCTAssertEqual(m.guidedTarget, 0)
+        for i in GuidedPhrase.notes { m.pluck(i, source: "demo") }
+        XCTAssertTrue(m.guidedPhrase!.complete)
+        m.stopGuidedPlay(); XCTAssertNil(m.guidedTarget)
+    }
+    func testEchoDoesNotSwallowLiveContactOrRecaptureItsTail() {
+        let m = FieldModel(); m.immersive = true; m.echoEnabled = true
+        m.record(); m.pluck(4, source: "echo"); m.pluck(4, source: "touch"); m.record()
+        XCTAssertEqual(m.loopCount, 1)
+    }
+    func testReachTransformRoundTripsForTurnedHead() {
+        let chamber = ResonanceChamber()
+        var head = simd_float4x4(simd_quatf(angle: .pi / 2, axis: [0, 1, 0]))
+        head.columns.3 = [1, 1.5, 2, 1]
+        chamber.calibrate(to: head)
+        let p = Instrument.center(3)
+        XCTAssertLessThan(simd_distance(p, chamber.localPoint(chamber.worldPoint(p))), 0.00001)
+        let close = chamber.worldPoint(p)
+        chamber.reach = .original
+        XCTAssertGreaterThan(simd_distance(close, chamber.worldPoint(p)), 0.15)
+    }
     func testClearUndoRestoresNotesAndKeepsPlaybackPaused() {
         let model = FieldModel(); model.immersive = true
         model.record(); model.pluck(3); model.record()
@@ -190,5 +285,29 @@ final class AcousticTests: XCTestCase {
         let chamber = ResonanceChamber(); try chamber.build()
         XCTAssertEqual(chamber.decorativeCount, 520); XCTAssertEqual(chamber.strings.count, 10)
         XCTAssertGreaterThan(chamber.triangleCount, 60_000)
+    }
+}
+
+final class MusicalFeatureTests: XCTestCase {
+    func testEveryMoodRetunesTheBaseBankToItsDeclaredPitch() {
+        for mood in Soundscape.allCases {
+            XCTAssertEqual(mood.midi.count, Instrument.count)
+            for i in 0..<Instrument.count {
+                let result = Instrument.frequency(i) * Double(mood.rate(i))
+                let expected = 440 * pow(2, Double(mood.midi[i] - 69) / 12)
+                XCTAssertEqual(result, expected, accuracy: 0.001)
+            }
+        }
+    }
+    func testEchoIsFiniteAndStaleEchoesNeverBurstAfterAPause() {
+        var echo = EchoTrail(); echo.append(string: 2, strength: 1, tension: 0, at: 1)
+        XCTAssertTrue(echo.tick(at: 1.1).isEmpty)
+        XCTAssertEqual(echo.tick(at: 1.33).map(\.strength), [0.38])
+        XCTAssertEqual(echo.tick(at: 1.65).map(\.strength), [0.16])
+        XCTAssertTrue(echo.tick(at: 2).isEmpty)
+        echo.append(string: 2, strength: 1, tension: 0, at: 3)
+        XCTAssertTrue(echo.tick(at: 10).isEmpty)
+        echo.append(string: 2, strength: 1, tension: 0, at: 11); echo.clear()
+        XCTAssertTrue(echo.tick(at: 11.33).isEmpty)
     }
 }

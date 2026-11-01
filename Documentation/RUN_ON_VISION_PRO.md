@@ -6,8 +6,10 @@
 4. Select your Apple Vision Pro as the run destination. Build and Run. This prototype is not published.
 5. Sit comfortably with clear space in front of your hands. Start at a modest sound level. Choose **Enter the Field**, then allow hand tracking when visionOS asks.
 6. The instrument is placed in front of your initial head position. **Tools → Recenter** repositions it at your current position without clearing a loop. **Reset field** also silences notes and clears the loop. Brush a fingertip sideways across a thread. Use a small bead for pinch-and-pull stretching.
-7. For a wave, move an open palm slowly through the nearby strings. For resonance, hold both open palms near the center, comfortably separated, for about one second. Help describes the gesture.
+7. For a wave, open your fingers and sweep a palm a few centimeters near the ten foreground strings. Watch the tracked-hand/open-palm status; use Tools → Restart hand tracking if tracking stops. Tools → Playing distance → Closer lowers and brings the instrument toward you. For resonance, hold both open palms near the center, comfortably separated, for about one second. Help describes the gesture.
 8. If hand access is denied or tracking is unavailable, gaze at a bead and pinch to pluck, or pinch and drag to stretch. **Tools → Play controls** supplies explicit controls for all effects. Exit remains visible when the control panel is collapsed. The Digital Crown also provides the standard system escape from full immersion.
+
+Sound offers Nocturne / Dawn / Drift and optional Echo trails. Tools → Start guided play lights an eight-note phrase. These modes preserve the current visit's loop.
 
 ## Optional local signing configuration
 

@@ -1,13 +1,13 @@
 {
   "result": "Passed",
-  "totalTestCount": 39,
-  "passedTests": 39,
+  "totalTestCount": 53,
+  "passedTests": 53,
   "failedTests": 0,
   "skippedTests": 0,
   "testFailures": [],
-  "runtimeWarnings": [],
-  "verificationDate": "2026-10-27",
+  "verificationDate": "2026-11-01",
   "toolchain": "Xcode 27.1 (27A9275)",
   "platform": "Apple Vision Pro Simulator, visionOS 27.0, arm64",
-  "scope": "Sanitized public-source checkout, full instrument and spatial toolbar regression suite"
+  "scope": "THREADS 1.1: 52 behavior/integration tests and one complete native toolbar/reentry UI test",
+  "finalLayoutUIRecheck": "Passed: complete native UI flow repeated after the final Tools layout adjustment"
 }

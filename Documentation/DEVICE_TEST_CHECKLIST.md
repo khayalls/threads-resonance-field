@@ -22,6 +22,9 @@ Status: pending a human wearing Apple Vision Pro. Do not infer these results fro
 
 ## Tracking and interaction
 
+- [ ] Open-palm waves trigger with a relaxed short sweep near the foreground strings, including near the upper strings and with one peripheral finger partly occluded. Ordinary pointing, a still palm and distant movement do not trigger a wave.
+- [ ] Exit and re-enter three times; raw hand tracking resumes and only one control window appears. Repeated Show controls requests do not stack windows.
+- [ ] Tools displays the tracked-hand/open-palm status. Restart hand tracking restores a lost session without changing the loop.
 - [ ] Allow hand permission: fingertip brush plucks the correct thread.
 - [ ] Slow and quick crossings produce a useful intensity range; resting fingers do not produce repeated notes.
 - [ ] Both hands work independently. Entering the tracking area does not create a burst of accidental notes.
@@ -34,6 +37,9 @@ Status: pending a human wearing Apple Vision Pro. Do not infer these results fro
 
 ## Audio and loop
 
+- [ ] Sound moods change the harmony and note-key labels. Echo trails produces two softer replies without uncontrolled feedback or loop duplication.
+- [ ] Guided play highlights one bead at a time, advances on the correct live note and can return to Free play.
+- [ ] Closer / Original reach changes preserve the performance and remain comfortable after turning and recentering.
 - [ ] All ten notes sound acoustic, tuned and free of clicks, harshness, clipping or bursts.
 - [ ] Faster plucks sound stronger; stretched strings audibly rise in pitch and brighten.
 - [ ] Sound is perceived at the strand; turning the head changes localization consistently.

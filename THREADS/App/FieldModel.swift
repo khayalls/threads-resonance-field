@@ -26,6 +26,13 @@ final class FieldModel {
     var automaticEntryConsumed = false
     var welcomeIsOpen = false
     var controlsWindowOpen = false
+    var controlsWindowRequested = false
+    var soundscape = Soundscape.nocturne
+    var echoEnabled = false { didSet { if !echoEnabled { echoes.clear() } } }
+    var reach = PlayingReach.relaxed
+    var guidedPhrase: GuidedPhrase?
+    var handsStatus = "Waiting for hands"
+    var guidedTarget: Int? { guidedPhrase?.target }
     @ObservationIgnored let chamber = ResonanceChamber()
     @ObservationIgnored let audio = SpatialInstrument()
     @ObservationIgnored let tracking = HandTracking()
@@ -34,11 +41,13 @@ final class FieldModel {
     @ObservationIgnored private var undoLoop: PerformanceLoop?
     @ObservationIgnored private var undoDeadline: Double = 0
     @ObservationIgnored private var gates = [CrossingGate(), CrossingGate()]
+    @ObservationIgnored private var waveGates = [WaveGate(), WaveGate()]
+    @ObservationIgnored private var echoes = EchoTrail()
     @ObservationIgnored private var samples: [HandSample?] = [nil, nil]
     @ObservationIgnored private var grabs: [Int?] = [nil, nil]
     @ObservationIgnored private var grabOrigins: [V3] = [.zero, .zero]
     @ObservationIgnored private var lastDragTone = Array(repeating: -100.0, count: Instrument.count)
-    @ObservationIgnored private var previousPalms: [V3?] = [nil, nil]
+    @ObservationIgnored private var lastContactTone = Array(repeating: -100.0, count: Instrument.count)
     @ObservationIgnored private var lastWave = -100.0
     @ObservationIgnored private var resonanceHold: Double = 0
     @ObservationIgnored private var lastResonance = -100.0
@@ -54,6 +63,7 @@ final class FieldModel {
     @ObservationIgnored private var counts: [String: Int] = [:]
     @ObservationIgnored private var transitions: [String] = []
     @ObservationIgnored private var built = false
+    @ObservationIgnored private var running = false
     @ObservationIgnored var subscription: EventSubscription?
     @ObservationIgnored var onVerificationExit: (() async -> Void)?
     @ObservationIgnored private let logger = Logger(subsystem: "studio.threads.resonance", category: "Field")
@@ -70,6 +80,9 @@ final class FieldModel {
         try chamber.build(); built = true
     }
     func start() {
+        guard !running else { return }
+        running = true
+        chamber.reach = reach
         chamber.prepareEntry(); audio.resume()
         started = CACurrentMediaTime(); immersive = true; lastAmbient = started
         tracking.onHand = { [weak self] side, sample in self?.receive(side: side, sample: sample) }
@@ -80,9 +93,13 @@ final class FieldModel {
         else if automatic { runDemo() }
     }
     func stop() {
+        running = false
+        immersive = false
         verificationTask?.cancel(); verificationTask = nil
         task?.cancel(); task = nil; tracking.stop(); audio.suspend()
         subscription?.cancel(); subscription = nil; loop.clear()
+        echoes.clear(); clearHandInput(); guidedPhrase = nil
+        controlsWindowRequested = false
         undoLoop = nil; canUndoLoopClear = false; soundReady = false
         loopState = .empty; loopProgress = 0; immersive = false
         log("exited"); writeReport()
@@ -92,6 +109,7 @@ final class FieldModel {
         let now = CACurrentMediaTime(), dt = Float(min(0.05, delta))
         if frames.count < 18_000 { frames.append(delta) }
         if let transform = tracking.deviceTransform() {
+            if !chamber.isCalibrated { clearHandInput() }
             chamber.calibrate(to: transform); audio.listener(transform: transform)
         } else {
             var fallback = matrix_identity_float4x4; fallback.columns.3 = [0, 1.65, 0, 1]
@@ -117,65 +135,75 @@ final class FieldModel {
         } else { resonanceHold = 0 }
         resonanceEnergy *= exp(-dt * 0.7)
         for event in loop.tick(at: now) { pluck(event.string, strength: event.strength, tension: event.tension, source: "loop") }
+        for event in echoes.tick(at: now) { pluck(event.string, strength: event.strength, tension: event.tension, source: "echo") }
         if ambient && now - lastAmbient > (now - lastActivity < 3 ? 6.5 : 4.2) {
             let sequence = [0, 4, 2, 7, 5, 3, 8, 1]
             let i = sequence[ambientIndex % sequence.count]; ambientIndex += 1; lastAmbient = now
             let anchors: [V3] = [[-3.2, 2, -3.5], [3.3, 2.4, -4], [0, 3, -7.2], [-4.6, 2, 2.4], [4.7, 2, 2.8]]
-            audio.play(string: i, strength: min(1, Float(now - started) / 4) * 0.65, tension: 0, position: anchors[ambientIndex % anchors.count], soft: true)
+            audio.play(string: i, strength: min(1, Float(now - started) / 4) * 0.65, tension: 0, position: anchors[ambientIndex % anchors.count], soft: true, soundscape: soundscape)
             motions[i].energy = max(motions[i].energy, 0.13)
         }
-        chamber.animate(motions: motions, time: Float(now - started), fade: min(1, Float(now - started) / 1.6), resonance: resonanceEnergy)
+        chamber.animate(motions: motions, time: Float(now - started), fade: min(1, Float(now - started) / 1.6), resonance: resonanceEnergy, guidedTarget: guidedTarget)
         if now - uiTime > 0.10 {
             uiTime = now; syncLoopUI(at: now)
             if canUndoLoopClear && now >= undoDeadline { undoLoop = nil; canUndoLoopClear = false }
             audioStatus = audio.status; soundReady = audio.ready
+            let visible = samples.compactMap { $0 }
+            handsStatus = visible.isEmpty ? "Waiting for hands · face the ten foreground strings" :
+                (visible.count == 2 ? "Both hands tracked" : "One hand tracked") + (visible.contains(where: { $0.open }) ? " · open palm ready" : " · open your fingers to wave")
         }
     }
     func pluck(_ i: Int, strength: Float = 0.65, tension: Float = 0, source: String = "touch") {
         guard motions.indices.contains(i), immersive else { return }
         let now = CACurrentMediaTime()
+        if source == "touch" {
+            guard now - lastContactTone[i] >= 0.08 else { return }
+            lastContactTone[i] = now
+        }
         motions[i].excite(strength); motions[i].lastPluck = now
-        audio.play(string: i, strength: strength, tension: tension, position: chamber.worldPoint(Instrument.center(i)))
-        if source != "loop" { loop.append(string: i, strength: strength, tension: tension, at: now); lastActivity = now }
-        lastNote = "\(Instrument.names[i])  ·  \(source == "loop" ? "echo" : "resonating")"
+        audio.play(string: i, strength: strength, tension: tension, position: chamber.worldPoint(Instrument.center(i)), soundscape: soundscape)
+        if source != "loop" && source != "echo" { loop.append(string: i, strength: strength, tension: tension, at: now); lastActivity = now }
+        if echoEnabled && source != "echo" { echoes.append(string: i, strength: strength, tension: tension, at: now) }
+        if source != "echo" { lastNote = "\(soundscape.name(i))  ·  \(source == "loop" ? "loop" : "resonating")" }
         if counts["touch", default: 0] == 0 && source == "touch" { hint = "Pinch a light bead and pull gently to change its tension." }
         counts[source, default: 0] += 1
+        if ["touch", "demo", "stretch"].contains(source), guidedPhrase != nil {
+            guidedPhrase?.play(i)
+            hint = guidedPhrase?.complete == true ? "Phrase complete. Make it your own, or try again in Tools." : "Follow the brighter bead. Take your time."
+        }
     }
     func receive(side: Int, sample: HandSample?) {
+        guard (0..<2).contains(side) else { return }
         guard let sample else {
             if let i = grabs[side] { release(i) }
-            samples[side] = nil; grabs[side] = nil; previousPalms[side] = nil; gates[side].reset(); return
+            samples[side] = nil; grabs[side] = nil; gates[side].reset(); waveGates[side].reset(); return
         }
-        let previousSample = samples[side]
+        guard immersive else { return }
         samples[side] = sample
         let tip = chamber.localPoint(sample.tip), thumb = chamber.localPoint(sample.thumb)
         let pinch = simd_distance(tip, thumb)
         if let i = grabs[side] {
-            if pinch > 0.041 { release(i); grabs[side] = nil; gates[side].reset() }
+            if !sample.pinchAvailable || pinch > 0.041 { release(i); grabs[side] = nil; gates[side].reset() }
             else {
                 drag(i, displacement: tip - grabOrigins[side])
             }
-        } else if pinch < 0.023 {
+        } else if sample.pinchAvailable && pinch < 0.023 {
             let candidate = (0..<Instrument.count).filter { !motions[$0].grabbed }.min { simd_distance(tip, Instrument.center($0)) < simd_distance(tip, Instrument.center($1)) }
             if let i = candidate, simd_distance(tip, Instrument.center(i)) < 0.065 {
                 grabs[side] = i; grabOrigins[side] = tip; motions[i].grabbed = true; gates[side].reset()
                 pluck(i, strength: 0.28, source: "stretch")
             }
         }
-        if pinch > 0.035 {
+        if !sample.pinchAvailable || pinch > 0.035 {
             for (i, strength) in gates[side].sample(point: tip, at: sample.timestamp, excluded: grabs[side]) {
                 if !motions[i].grabbed { pluck(i, strength: strength) }
             }
         } else { gates[side].reset() }
         let palm = chamber.localPoint(sample.palm)
-        let elapsed = sample.timestamp - (previousSample?.timestamp ?? sample.timestamp)
-        let speed = simd_distance(palm, previousPalms[side] ?? palm) / Float(max(0.001, elapsed))
-        if sample.open, elapsed > 0, elapsed < 0.12, speed > 0.045, speed < 1.2,
-           sample.timestamp - lastWave > 1.5, abs(palm.x) < 0.65, palm.y > -0.65, palm.y < 0.20,
-           palm.z < -0.32, palm.z > -0.92 {
-            wave(strength: min(0.7, speed * 0.6 + 0.2)); lastWave = sample.timestamp
+        if let strength = waveGates[side].sample(palm: palm, open: sample.open, at: sample.timestamp),
+           sample.timestamp - lastWave > 0.55 {
+            wave(strength: strength); lastWave = sample.timestamp
         }
-        previousPalms[side] = palm
     }
     func drag(_ i: Int, displacement: V3) {
         guard motions.indices.contains(i) else { return }
@@ -186,7 +214,7 @@ final class FieldModel {
         let now = CACurrentMediaTime()
         if now - lastDragTone[i] > 0.3, distance > 0.015 {
             let tension = simd_length(motions[i].targetPull)
-            audio.play(string: i, strength: 0.27, tension: tension, position: chamber.worldPoint(Instrument.center(i) + motions[i].pull))
+            audio.play(string: i, strength: 0.27, tension: tension, position: chamber.worldPoint(Instrument.center(i) + motions[i].pull), soundscape: soundscape)
             loop.append(string: i, strength: 0.27, tension: tension, at: now)
             lastDragTone[i] = now
         }
@@ -238,6 +266,7 @@ final class FieldModel {
         loop = saved; undoLoop = nil; canUndoLoopClear = false; syncLoopUI(); log("loop_restored_paused")
     }
     func recenter() {
+        clearHandInput()
         if let head = tracking.deviceTransform() { chamber.calibrate(to: head, force: true) }
         else {
             var seated = matrix_identity_float4x4; seated.columns.3 = [0, 1.65, 0, 1]
@@ -248,13 +277,46 @@ final class FieldModel {
     func reset() {
         clearLoop(); audio.silence(); motions = Array(repeating: StringMotion(), count: Instrument.count)
         samples = [nil, nil]; grabs = [nil, nil]; gates = [CrossingGate(), CrossingGate()]
-        previousPalms = [nil, nil]; lastDragTone = Array(repeating: -100, count: Instrument.count)
-        lastNote = "D minor pentatonic"; resonanceEnergy = 0; resonanceHold = 0
+        echoes.clear(); guidedPhrase = nil
+        lastDragTone = Array(repeating: -100, count: Instrument.count)
+        lastNote = soundscape.detail; resonanceEnergy = 0; resonanceHold = 0
         recenter()
         hint = "Brush across a thread. Listen to the light."; log("reset")
     }
-    func pause() { audio.suspend(); samples = [nil, nil]; grabs = [nil, nil]; gates = [CrossingGate(), CrossingGate()]; motions.indices.forEach { motions[$0].grabbed = false }; if loop.state == .playing { toggleLoop() } }
-    func resume() { audio.resume() }
+    func pause() {
+        echoes.clear(); clearHandInput(); audio.suspend()
+        task?.cancel(); task = nil; tracking.stop()
+        if loop.state == .playing { toggleLoop() }
+    }
+    func resume() {
+        audio.resume()
+        if running && immersive && task == nil { restartTracking() }
+    }
+    func restartTracking() {
+        guard immersive else { return }
+        task?.cancel(); clearHandInput(); tracking.stop()
+        trackingStatus = "Restarting hand tracking…"
+        task = Task { [weak self] in await self?.tracking.start() }
+    }
+    private func clearHandInput() {
+        samples = [nil, nil]; grabs = [nil, nil]
+        gates = [CrossingGate(), CrossingGate()]; waveGates = [WaveGate(), WaveGate()]
+        for i in motions.indices { motions[i].grabbed = false; motions[i].targetPull = .zero }
+        lastWave = -100; resonanceHold = 0; handsStatus = "Waiting for hands"
+        lastContactTone = Array(repeating: -100, count: Instrument.count)
+    }
+    func setReach(_ value: PlayingReach) {
+        clearHandInput(); reach = value; chamber.reach = value
+        hint = "The ten foreground strings are your instrument. Brush or wave near them."
+    }
+    func startGuidedPlay() { guidedPhrase = GuidedPhrase(); hint = "Follow the brighter bead. Take your time." }
+    func stopGuidedPlay() { guidedPhrase = nil; hint = "Play freely. The field is listening." }
+    func requestControls(_ open: () -> Void) {
+        guard immersive, !controlsWindowOpen, !controlsWindowRequested else { return }
+        controlsWindowRequested = true; open()
+    }
+    func controlsAppeared() { controlsWindowOpen = true; controlsWindowRequested = false }
+    func controlsDisappeared() { controlsWindowOpen = false; controlsWindowRequested = false }
     private func log(_ event: String) { transitions.append(event); logger.info("THREADS \(event, privacy: .public)") }
 
     private func runDemo() {

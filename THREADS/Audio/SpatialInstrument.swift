@@ -100,12 +100,12 @@ final class SpatialInstrument {
         } catch { status = "Audio unavailable: \(error.localizedDescription)"; ready = false }
     }
 
-    func play(string: Int, strength: Float, tension: Float, position: V3, soft: Bool = false) {
+    func play(string: Int, strength: Float, tension: Float, position: V3, soft: Bool = false, soundscape: Soundscape = .nocturne) {
         guard ready, buffers.indices.contains(string) else { return }
         let i = cursor % players.count; cursor += 1
         let player = players[i], rate = rates[i], source = sources[i]
         player.stop()
-        rate.rate = pow(2, min(0.18, max(0, tension)) * 3.5)
+        rate.rate = soundscape.rate(string) * pow(2, min(0.18, max(0, tension)) * 3.5)
         source.position = AVAudio3DPoint(x: position.x, y: position.y, z: position.z)
         source.volume = (soft ? 0.07 : 0.19) * min(1, max(0.05, strength))
         player.scheduleBuffer(buffers[string], at: nil)

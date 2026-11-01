@@ -12,16 +12,35 @@ final class ExperienceTests: XCTestCase {
         enter.tap()
         let exit = app.buttons["exit-field"]
         XCTAssertTrue(exit.waitForExistence(timeout: 25), app.debugDescription)
+        XCTAssertEqual(app.buttons.matching(identifier: "exit-field").count, 1)
+
+        func reveal(_ element: XCUIElement) {
+            let scroll = app.scrollViews.firstMatch
+            for _ in 0..<8 {
+                if element.isHittable { return }
+                scroll.swipeUp()
+            }
+            XCTAssertTrue(element.isHittable, app.debugDescription)
+        }
+        func tapTool(_ id: String) { let button = app.buttons[id]; reveal(button); button.tap() }
 
         app.buttons["sound-controls"].tap()
+        XCTAssertTrue(app.buttons["Dawn"].waitForExistence(timeout: 5))
+        app.buttons["Dawn"].tap()
+        XCTAssertTrue(app.staticTexts["D major · open and luminous"].exists)
+        app.buttons["Nocturne"].tap()
+        let echo = app.switches["echo-trails"]
+        XCTAssertTrue(echo.exists); echo.tap(); echo.tap()
         let volume = app.sliders["Sound level"]
         XCTAssertTrue(volume.waitForExistence(timeout: 5), app.debugDescription)
+        reveal(app.buttons["Decrease sound level"])
         app.buttons["Decrease sound level"].tap()
         XCTAssertTrue(app.staticTexts["60%"].exists)
         app.buttons["Increase sound level"].tap()
         XCTAssertTrue(app.staticTexts["65%"].exists)
         let ambient = app.switches["ambient-notes"]
         XCTAssertTrue(ambient.exists)
+        reveal(ambient)
         ambient.tap()
         app.buttons["close-controls-panel"].tap()
 
@@ -29,7 +48,7 @@ final class ExperienceTests: XCTestCase {
             app.buttons["field-tools"].tap()
             let play = app.buttons["play-controls"]
             XCTAssertTrue(play.waitForExistence(timeout: 5))
-            play.tap()
+            reveal(play); play.tap()
             XCTAssertTrue(app.buttons["Play D3"].waitForExistence(timeout: 5), app.debugDescription)
         }
         openKeys()
@@ -61,7 +80,7 @@ final class ExperienceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Loop paused"].waitForExistence(timeout: 5))
 
         app.buttons["field-tools"].tap()
-        app.buttons["recenter-field"].tap()
+        tapTool("recenter-field")
         XCTAssertTrue(app.staticTexts["Loop paused"].waitForExistence(timeout: 5))
 
         exit.tap()
@@ -71,7 +90,7 @@ final class ExperienceTests: XCTestCase {
         app.buttons["clear-loop"].tap()
 
         app.buttons["field-tools"].tap()
-        app.buttons["minimize-controls"].tap()
+        tapTool("minimize-controls")
         XCTAssertTrue(app.buttons["expand-controls"].waitForExistence(timeout: 5))
         XCTAssertTrue(exit.exists)
         XCTAssertFalse(app.buttons["sound-controls"].exists)
@@ -79,13 +98,29 @@ final class ExperienceTests: XCTestCase {
         XCTAssertTrue(app.buttons["sound-controls"].exists)
 
         app.buttons["field-tools"].tap()
-        app.buttons["help-field"].tap()
+        tapTool("help-field")
         XCTAssertTrue(app.staticTexts["Playing with light"].waitForExistence(timeout: 5))
         app.buttons["close-controls-panel"].tap()
         app.buttons["field-tools"].tap()
-        app.buttons["reset-field"].tap()
+        tapTool("reset-field")
+        app.buttons["field-tools"].tap()
+        app.buttons["Original"].tap()
+        app.buttons["Closer"].tap()
+        tapTool("restart-hands")
+        app.buttons["close-controls-panel"].tap()
+        app.buttons["field-tools"].tap()
+        tapTool("guided-play")
+        XCTAssertTrue(app.buttons["exit-field"].exists)
         exit.tap()
         XCTAssertTrue(enter.waitForExistence(timeout: 15))
         XCTAssertTrue(enter.isEnabled)
+        // Repeated immersion must reuse the single native control window.
+        for _ in 0..<3 {
+            enter.tap()
+            XCTAssertTrue(exit.waitForExistence(timeout: 20))
+            XCTAssertEqual(app.buttons.matching(identifier: "exit-field").count, 1)
+            exit.tap()
+            XCTAssertTrue(enter.waitForExistence(timeout: 15))
+        }
     }
 }
